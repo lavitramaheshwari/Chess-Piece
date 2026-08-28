@@ -205,6 +205,8 @@
   </footer>
 
   <script>
+
+    
     let session = null;
     const previewImg = document.getElementById('preview-img');
     const canvas = document.getElementById('preview-canvas');
@@ -227,6 +229,80 @@
     }
     loadModel();
 
+    function processDetections(outputData, dims) {
+  const CONF_THRESHOLD = 0.25; // Adjust confidence threshold as needed
+  
+  // Dimensions for standard YOLOv8/v9 outputs: [1, 4 + num_classes, 8400]
+  const numChannels = dims[1]; // Usually 16 (4 bounding box coords + 12 chess classes)
+  const numAnchors = dims[2];  // Usually 8400 anchor predictions
+
+  let bestBox = null;
+  let maxScore = 0;
+
+  // Iterate over each predicted anchor box
+  for (let i = 0; i < numAnchors; i++) {
+    // Find class with the highest confidence score for this anchor
+    let classId = -1;
+    let highestClassScore = 0;
+
+    for (let c = 0; c < CLASS_NAMES.length; c++) {
+      const score = outputData[(4 + c) * numAnchors + i];
+      if (score > highestClassScore) {
+        highestClassScore = score;
+        classId = c;
+      }
+    }
+
+    // Keep track of the prediction with the highest score
+    if (highestClassScore > CONF_THRESHOLD && highestClassScore > maxScore) {
+      maxScore = highestClassScore;
+
+      // Extract box center and dimensions (in pixels relative to 640x640)
+      const cx = outputData[0 * numAnchors + i];
+      const cy = outputData[1 * numAnchors + i];
+      const w  = outputData[2 * numAnchors + i];
+      const h  = outputData[3 * numAnchors + i];
+
+      // Convert center coordinates (cx, cy) to top-left corner coordinates (x, y)
+      const x = cx - w / 2;
+      const y = cy - h / 2;
+
+      bestBox = {
+        x, y, w, h,
+        label: `${CLASS_NAMES[classId]} (${(highestClassScore * 100).toFixed(1)}%)`
+      };
+    }
+  }
+
+  // Draw the highest confidence bounding box if detected
+  if (bestBox) {
+    drawBox(bestBox.x, bestBox.y, bestBox.w, bestBox.h, bestBox.label);
+  }
+}
+
+function drawBox(x, y, w, h, label) {
+  // Draw main bounding box outline
+  ctx.strokeStyle = '#f59e0b'; // Matching UI orange
+  ctx.lineWidth = 3;
+  ctx.strokeRect(x, y, w, h);
+
+  // Set font properties for measurement
+  ctx.font = 'bold 12px sans-serif';
+  const textWidth = ctx.measureText(label).width;
+  const padding = 8;
+  const labelHeight = 22;
+
+  // Determine label background position (above box, or inside if near edge)
+  const labelY = y > labelHeight ? y - labelHeight : y;
+
+  // Draw label background pill
+  ctx.fillStyle = '#f59e0b';
+  ctx.fillRect(x, labelY, textWidth + padding * 2, labelHeight);
+
+  // Draw label text inside pill
+  ctx.fillStyle = '#000000';
+  ctx.fillText(label, x + padding, labelY + 15);
+} 
     // Trigger File Picker
     uploadBtn.addEventListener('click', () => fileInput.click());
 
