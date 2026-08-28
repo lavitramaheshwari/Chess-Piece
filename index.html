@@ -123,20 +123,20 @@
       border: 1px solid var(--border-color);
     }
 
-    #preview-canvas, #webcam {
+    #preview-img, #preview-canvas, #webcam {
       width: 100%;
       height: 380px;
       object-fit: cover;
       display: block;
     }
 
-    #webcam { display: none; }
+    #preview-canvas, #webcam { display: none; }
 
     .stat-badge {
       position: absolute;
       bottom: -10px;
       left: -20px;
-      background: rgba(20, 23, 32, 0.85);
+      background: rgba(20, 23, 32, 0.9);
       backdrop-filter: blur(10px);
       border: 1px solid var(--border-color);
       padding: 1.2rem;
@@ -188,6 +188,7 @@
     </div>
 
     <div class="preview-card">
+      <img id="preview-img" src="./screen.png" alt="Chess Piece Detection Preview">
       <video id="webcam" autoplay playsinline></video>
       <canvas id="preview-canvas" width="416" height="416"></canvas>
       
@@ -204,6 +205,7 @@
 
   <script>
     let session = null;
+    const previewImg = document.getElementById('preview-img');
     const canvas = document.getElementById('preview-canvas');
     const ctx = canvas.getContext('2d');
     const fileInput = document.getElementById('file-input');
@@ -212,14 +214,14 @@
     const uploadBtn = document.getElementById('upload-btn');
     const statusText = document.getElementById('status');
 
-    // Load Model
+    // Load Model (Updated to best.onnx)
     async function loadModel() {
       try {
         statusText.innerText = "Loading model...";
         session = await ort.InferenceSession.create('./best.onnx');
         statusText.innerText = "";
       } catch (err) {
-        statusText.innerText = "Failed to load model.onnx";
+        statusText.innerText = "Failed to load best.onnx";
       }
     }
     loadModel();
@@ -227,13 +229,16 @@
     // Trigger File Picker
     uploadBtn.addEventListener('click', () => fileInput.click());
 
-    // File Upload Handler
+    // Upload Handler
     fileInput.addEventListener('change', (e) => {
       const file = e.target.files[0];
       if (!file) return;
       stopWebcam();
+      
       const img = new Image();
       img.onload = () => {
+        previewImg.style.display = 'none';
+        canvas.style.display = 'block';
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
         runInference();
       };
@@ -243,16 +248,17 @@
     // Camera Handler
     cameraBtn.addEventListener('click', async () => {
       if (webcam.style.display === 'block') {
-        // Capture frame if camera active
+        previewImg.style.display = 'none';
+        canvas.style.display = 'block';
         ctx.drawImage(webcam, 0, 0, canvas.width, canvas.height);
         runInference();
       } else {
-        // Start camera
         try {
           const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
           webcam.srcObject = stream;
-          webcam.style.display = 'block';
+          previewImg.style.display = 'none';
           canvas.style.display = 'none';
+          webcam.style.display = 'block';
           cameraBtn.innerText = '📸 Capture Frame';
         } catch (err) {
           alert('Camera permission denied.');
@@ -264,7 +270,6 @@
       if (webcam.srcObject) {
         webcam.srcObject.getTracks().forEach(track => track.stop());
         webcam.style.display = 'none';
-        canvas.style.display = 'block';
         cameraBtn.innerText = '📷 Start Camera';
       }
     }
