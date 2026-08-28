@@ -216,7 +216,7 @@
     async function loadModel() {
       try {
         statusText.innerText = "Loading model...";
-        session = await ort.InferenceSession.create('./model.onnx');
+        session = await ort.InferenceSession.create('./best.onnx');
         statusText.innerText = "";
       } catch (err) {
         statusText.innerText = "Failed to load model.onnx";
