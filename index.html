@@ -156,11 +156,33 @@
 
     #preview-canvas, #webcam { display: none; }
 
-    footer {
-      border-top: 1px solid rgba(255, 255, 255, 0.05);
-      padding-top: 1.5rem;
+    /* Stats Banner Below Hero Section */
+    .stats-banner {
+      grid-column: 1 / -1; /* Spans full width below both grid columns */
+      background: rgba(20, 23, 32, 0.7);
+      backdrop-filter: blur(10px);
+      border: 1px solid var(--border-color);
+      padding: 1.5rem 2rem;
+      border-radius: 12px;
+      margin-top: 2rem;
+      display: flex;
+      align-items: center;
+      gap: 1.5rem;
+      max-width: 500px;
+    }
+
+    .stats-banner h3 {
+      color: var(--accent-orange);
+      font-size: 1.5rem;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .stats-banner p {
       color: var(--text-muted);
       font-size: 0.85rem;
+      line-height: 1.4;
+    }
     }
   </style>
 </head>
@@ -193,11 +215,12 @@
       <img id="preview-img" src="./screen.png" alt="Chess Piece Detection Preview">
       <video id="webcam" autoplay playsinline muted></video>
       <canvas id="preview-canvas" width="640" height="640"></canvas>
-      
-      <div class="stat-badge">
-        <h3>99.2% Accuracy</h3>
-        <p>Trained on 250,000+ lighting and rotation variations.</p>
-      </div>
+    </div>
+
+    <!-- Stats Section Moved Below -->
+    <div class="stats-banner">
+      <h3>99.2% Accuracy</h3>
+      <p>Trained on 2,000+ lighting and rotation variations.</p>
     </div>
   </main>
 
