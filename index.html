@@ -284,33 +284,86 @@ async function runInference() {
   const float32Data = new Float32Array(3 * width * height);
   const channelSize = width * height;
 
-  // ImageNet Normalization Constants
-  const mean = [0.485, 0.456, 0.406];
-  const std = [0.229, 0.224, 0.225];
-
+  // Simple 0-1 normalization (or add ImageNet mean/std if your model requires it)
   for (let i = 0; i < channelSize; i++) {
-    // Red channel
-    const r = data[i * 4] / 255.0;
-    float32Data[i] = (r - mean[0]) / std[0];
-
-    // Green channel
-    const g = data[i * 4 + 1] / 255.0;
-    float32Data[channelSize + i] = (g - mean[1]) / std[1];
-
-    // Blue channel
-    const b = data[i * 4 + 2] / 255.0;
-    float32Data[channelSize * 2 + i] = (b - mean[2]) / std[2];
+    float32Data[i] = data[i * 4] / 255.0;
+    float32Data[channelSize + i] = data[i * 4 + 1] / 255.0;
+    float32Data[channelSize * 2 + i] = data[i * 4 + 2] / 255.0;
   }
 
-  // Input shape now matches [1, 3, 640, 640]
   const inputTensor = new ort.Tensor('float32', float32Data, [1, 3, height, width]);
 
   try {
     const results = await session.run({ images: inputTensor });
+    
+    // Get the first output tensor (adjust output name if your model uses another key)
+    const outputKey = Object.keys(results)[0];
+    const outputTensor = results[outputKey];
+
+    // Redraw base image clean before drawing boxes
+    ctx.putImageData(imageData, 0, 0);
+
+    // Process and render detections
+    processDetections(outputTensor.data, outputTensor.dims);
     statusText.innerText = "Inference complete!";
   } catch (err) {
     statusText.innerText = "Inference error: " + err.message;
   }
+// Map of your trained class names
+const CLASS_NAMES = ['b_BISHOP', 'b_KING', 'b_KNIGHT', 'b_PAWN', 'b_QUEEN', 'b_ROOK', 'w_BISHOP', 'w_KING', 'w_KNIGHT', 'w_PAWN', 'w_QUEEN', 'w_ROOK'];
+
+function processDetections(outputData, dims) {
+  const CONF_THRESHOLD = 0.4; // Filter out low confidence detections
+  
+  // Handling standard YOLO output shape [1, 84, 8400] or [1, N, 6]
+  // Adjust indexing depending on your exact ONNX export structure:
+  const numDetections = dims[2] || dims[1]; 
+
+  for (let i = 0; i < numDetections; i++) {
+    // Example for raw YOLOv8 ONNX format [xc, yc, w, h, class_scores...]
+    const xc = outputData[i];
+    const yc = outputData[numDetections + i];
+    const w = outputData[2 * numDetections + i];
+    const h = outputData[3 * numDetections + i];
+
+    // Find highest class confidence
+    let maxScore = 0;
+    let classId = -1;
+    for (let c = 0; c < CLASS_NAMES.length; c++) {
+      const score = outputData[(4 + c) * numDetections + i];
+      if (score > maxScore) {
+        maxScore = score;
+        classId = c;
+      }
+    }
+
+    if (maxScore > CONF_THRESHOLD) {
+      // Calculate top-left box coordinates
+      const x = xc - w / 2;
+      const y = yc - h / 2;
+      
+      const label = `${CLASS_NAMES[classId] || 'Piece'} (${(maxScore * 100).toFixed(1)}%)`;
+      drawBox(x, y, w, h, label);
+    }
+  }
+}
+
+function drawBox(x, y, w, h, label) {
+  // Draw Box
+  ctx.strokeStyle = '#f59e0b';
+  ctx.lineWidth = 3;
+  ctx.strokeRect(x, y, w, h);
+
+  // Draw Label Background
+  ctx.fillStyle = '#f59e0b';
+  const textWidth = ctx.measureText(label).width;
+  ctx.fillRect(x, y > 20 ? y - 25 : y, textWidth + 10, 22);
+
+  // Draw Text Label
+  ctx.fillStyle = '#000000';
+  ctx.font = 'bold 12px sans-serif';
+  ctx.fillText(label, x + 5, y > 20 ? y - 10 : y + 15);
+
 }
   </script>
 </body>
