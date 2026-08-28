@@ -204,6 +204,64 @@
   </footer>
 
   <script>
+
+    // Map of your trained class names
+const CLASS_NAMES = ['b_BISHOP', 'b_KING', 'b_KNIGHT', 'b_PAWN', 'b_QUEEN', 'b_ROOK', 'w_BISHOP', 'w_KING', 'w_KNIGHT', 'w_PAWN', 'w_QUEEN', 'w_ROOK'];
+
+function processDetections(outputData, dims) {
+  const CONF_THRESHOLD = 0.4; // Filter out low confidence detections
+  
+  // Handling standard YOLO output shape [1, 84, 8400] or [1, N, 6]
+  // Adjust indexing depending on your exact ONNX export structure:
+  const numDetections = dims[2] || dims[1]; 
+
+  for (let i = 0; i < numDetections; i++) {
+    // Example for raw YOLOv8 ONNX format [xc, yc, w, h, class_scores...]
+    const xc = outputData[i];
+    const yc = outputData[numDetections + i];
+    const w = outputData[2 * numDetections + i];
+    const h = outputData[3 * numDetections + i];
+
+    // Find highest class confidence
+    let maxScore = 0;
+    let classId = -1;
+    for (let c = 0; c < CLASS_NAMES.length; c++) {
+      const score = outputData[(4 + c) * numDetections + i];
+      if (score > maxScore) {
+        maxScore = score;
+        classId = c;
+      }
+    }
+
+    if (maxScore > CONF_THRESHOLD) {
+      // Calculate top-left box coordinates
+      const x = xc - w / 2;
+      const y = yc - h / 2;
+      
+      const label = `${CLASS_NAMES[classId] || 'Piece'} (${(maxScore * 100).toFixed(1)}%)`;
+      drawBox(x, y, w, h, label);
+    }
+  }
+}
+
+function drawBox(x, y, w, h, label) {
+  // Draw Box
+  ctx.strokeStyle = '#f59e0b';
+  ctx.lineWidth = 3;
+  ctx.strokeRect(x, y, w, h);
+
+  // Draw Label Background
+  ctx.fillStyle = '#f59e0b';
+  const textWidth = ctx.measureText(label).width;
+  ctx.fillRect(x, y > 20 ? y - 25 : y, textWidth + 10, 22);
+
+  // Draw Text Label
+  ctx.fillStyle = '#000000';
+  ctx.font = 'bold 12px sans-serif';
+  ctx.fillText(label, x + 5, y > 20 ? y - 10 : y + 15);
+}
+
+    
     let session = null;
     const previewImg = document.getElementById('preview-img');
     const canvas = document.getElementById('preview-canvas');
@@ -309,61 +367,7 @@ async function runInference() {
   } catch (err) {
     statusText.innerText = "Inference error: " + err.message;
   }
-// Map of your trained class names
-const CLASS_NAMES = ['b_BISHOP', 'b_KING', 'b_KNIGHT', 'b_PAWN', 'b_QUEEN', 'b_ROOK', 'w_BISHOP', 'w_KING', 'w_KNIGHT', 'w_PAWN', 'w_QUEEN', 'w_ROOK'];
 
-function processDetections(outputData, dims) {
-  const CONF_THRESHOLD = 0.4; // Filter out low confidence detections
-  
-  // Handling standard YOLO output shape [1, 84, 8400] or [1, N, 6]
-  // Adjust indexing depending on your exact ONNX export structure:
-  const numDetections = dims[2] || dims[1]; 
-
-  for (let i = 0; i < numDetections; i++) {
-    // Example for raw YOLOv8 ONNX format [xc, yc, w, h, class_scores...]
-    const xc = outputData[i];
-    const yc = outputData[numDetections + i];
-    const w = outputData[2 * numDetections + i];
-    const h = outputData[3 * numDetections + i];
-
-    // Find highest class confidence
-    let maxScore = 0;
-    let classId = -1;
-    for (let c = 0; c < CLASS_NAMES.length; c++) {
-      const score = outputData[(4 + c) * numDetections + i];
-      if (score > maxScore) {
-        maxScore = score;
-        classId = c;
-      }
-    }
-
-    if (maxScore > CONF_THRESHOLD) {
-      // Calculate top-left box coordinates
-      const x = xc - w / 2;
-      const y = yc - h / 2;
-      
-      const label = `${CLASS_NAMES[classId] || 'Piece'} (${(maxScore * 100).toFixed(1)}%)`;
-      drawBox(x, y, w, h, label);
-    }
-  }
-}
-
-function drawBox(x, y, w, h, label) {
-  // Draw Box
-  ctx.strokeStyle = '#f59e0b';
-  ctx.lineWidth = 3;
-  ctx.strokeRect(x, y, w, h);
-
-  // Draw Label Background
-  ctx.fillStyle = '#f59e0b';
-  const textWidth = ctx.measureText(label).width;
-  ctx.fillRect(x, y > 20 ? y - 25 : y, textWidth + 10, 22);
-
-  // Draw Text Label
-  ctx.fillStyle = '#000000';
-  ctx.font = 'bold 12px sans-serif';
-  ctx.fillText(label, x + 5, y > 20 ? y - 10 : y + 15);
-}
 }
   </script>
 </body>
