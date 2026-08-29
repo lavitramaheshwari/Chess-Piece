@@ -4,9 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>chesspiece.me</title>
-  <!-- ONNX Runtime Web -->
- <!-- Replace your current ONNX script tag with this -->
-<script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@dev/dist/ort.webgl.min.js"></script>
+  
+  <!-- ONNX Runtime Web Library -->
+  <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
+
   <style>
     :root {
       --bg-color: #0b0d12;
@@ -85,29 +86,6 @@
       max-width: 500px;
     }
 
-    /* Accuracy Info Box under description */
-    .accuracy-info {
-      background: var(--card-bg);
-      border: 1px solid var(--border-color);
-      border-left: 3px solid var(--accent-orange);
-      padding: 1rem;
-      border-radius: 8px;
-      margin-bottom: 2rem;
-      max-width: 500px;
-    }
-
-    .accuracy-info h3 {
-      color: var(--accent-orange);
-      font-size: 1.1rem;
-      font-weight: 700;
-    }
-
-    .accuracy-info p {
-      color: var(--text-muted);
-      font-size: 0.85rem;
-      margin-top: 4px;
-    }
-
     .button-group {
       display: flex;
       gap: 1rem;
@@ -158,7 +136,7 @@
 
     /* Stats Banner Below Hero Section */
     .stats-banner {
-      grid-column: 1 / -1; /* Spans full width below both grid columns */
+      grid-column: 1 / -1;
       background: rgba(20, 23, 32, 0.7);
       backdrop-filter: blur(10px);
       border: 1px solid var(--border-color);
@@ -183,6 +161,11 @@
       font-size: 0.85rem;
       line-height: 1.4;
     }
+
+    footer {
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      padding-top: 2rem;
     }
   </style>
 </head>
@@ -193,7 +176,7 @@
     <div class="badge-online">• AI DETECTION ONLINE</div>
   </header>
 
-<main>
+  <main>
     <div class="content">
       <div class="tagline">— REAL-TIME COMPUTER VISION</div>
       <h1>chesspiece.me</h1>
@@ -217,7 +200,6 @@
       <canvas id="preview-canvas" width="640" height="640"></canvas>
     </div>
 
-    <!-- Stats Section Moved Below -->
     <div class="stats-banner">
       <h3>99.2% Accuracy</h3>
       <p>Trained on 2,000+ lighting and rotation variations.</p>
@@ -249,16 +231,25 @@
     const uploadBtn = document.getElementById('upload-btn');
     const statusText = document.getElementById('status');
 
-    // Load ONNX Model
+    // Robust ONNX Model Loading with Engine Fallback
     async function loadModel() {
       try {
         statusText.innerText = "Loading model...";
         session = await ort.InferenceSession.create('./best.onnx', {
-          executionProviders: ['webgl', 'wasm'] // Optimized for mobile and desktop browsers
+          executionProviders: ['webgl', 'wasm']
         });
         statusText.innerText = "";
       } catch (err) {
-        statusText.innerText = "Failed to load best.onnx";
+        console.warn("WebGL initialization failed, retrying with WASM:", err);
+        try {
+          session = await ort.InferenceSession.create('./best.onnx', {
+            executionProviders: ['wasm']
+          });
+          statusText.innerText = "";
+        } catch (fallbackErr) {
+          console.error("Failed to load model:", fallbackErr);
+          statusText.innerText = "Failed to load best.onnx";
+        }
       }
     }
     loadModel();
@@ -277,7 +268,6 @@
         webcam.style.display = 'none';
         canvas.style.display = 'block';
 
-        // Clear and center image on 640x640 canvas
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
         runInferenceOnCanvas();
@@ -290,7 +280,7 @@
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ 
           video: { 
-            facingMode: 'environment', // Uses rear camera on mobile devices
+            facingMode: 'environment',
             width: { ideal: 1280 },
             height: { ideal: 720 }
           } 
@@ -298,7 +288,7 @@
         
         webcam.srcObject = stream;
         previewImg.style.display = 'none';
-        webcam.style.display = 'none'; // Keep video hidden; draw video frames onto canvas
+        webcam.style.display = 'none';
         canvas.style.display = 'block';
 
         cameraBtn.style.display = 'none';
@@ -307,7 +297,6 @@
         isStreaming = true;
         statusText.innerText = "Live detection active";
         
-        // Wait for video stream dimensions to load before processing loop
         webcam.onloadedmetadata = () => {
           processLiveFrame();
         };
@@ -339,17 +328,14 @@
       statusText.innerText = "";
     }
 
-    // Continuous Live Video Processing Loop
+    // Continuous Live Video Loop
     async function processLiveFrame() {
       if (!isStreaming) return;
 
       if (!isProcessing && session) {
         isProcessing = true;
-        
-        // Draw live video frame scaled directly onto the 640x640 canvas
         ctx.drawImage(webcam, 0, 0, canvas.width, canvas.height);
         await runInferenceOnCanvas();
-        
         isProcessing = false;
       }
 
@@ -365,7 +351,6 @@
       const float32Data = new Float32Array(3 * width * height);
       const channelSize = width * height;
 
-      // Extract RGB channels & normalize (0 - 1)
       for (let i = 0; i < channelSize; i++) {
         float32Data[i] = data[i * 4] / 255.0;
         float32Data[channelSize + i] = data[i * 4 + 1] / 255.0;
@@ -379,23 +364,19 @@
         const outputKey = Object.keys(results)[0];
         const outputTensor = results[outputKey];
 
-        // Redraw current video frame/image cleanly before overlaying bounding boxes
         ctx.putImageData(imageData, 0, 0);
-
-        // Render bounding boxes
         processDetections(outputTensor.data, outputTensor.dims);
       } catch (err) {
         statusText.innerText = "Inference error: " + err.message;
       }
     }
 
-    // Parse and Render Bounding Boxes
+    // Process Detections (Threshold > 50%, removes confidence text)
     function processDetections(outputData, dims) {
-      const CONF_THRESHOLD = 0.35; // Confidence threshold
+      const CONF_THRESHOLD = 0.50; // Filter detections above 50%
       const numAnchors = dims[2] || 8400;
 
-      let bestBox = null;
-      let maxScore = 0;
+      let boxes = [];
 
       for (let i = 0; i < numAnchors; i++) {
         let classId = -1;
@@ -409,45 +390,43 @@
           }
         }
 
-        if (highestClassScore > CONF_THRESHOLD && highestClassScore > maxScore) {
-          maxScore = highestClassScore;
-
-          // Box center and dimensions from YOLO [640, 640] output
+        if (highestClassScore >= CONF_THRESHOLD) {
           const cx = outputData[0 * numAnchors + i];
           const cy = outputData[1 * numAnchors + i];
           const w  = outputData[2 * numAnchors + i];
           const h  = outputData[3 * numAnchors + i];
 
-          // Calculate top-left corner
           const x = cx - w / 2;
           const y = cy - h / 2;
 
-          bestBox = {
+          boxes.push({
             x, y, w, h,
-            label: `${CLASS_NAMES[classId]} (${(highestClassScore * 100).toFixed(1)}%)`
-          };
+            score: highestClassScore,
+            label: CLASS_NAMES[classId] // Class name only (no percentage)
+          });
         }
       }
 
-      if (bestBox) {
-        drawBox(bestBox.x, bestBox.y, bestBox.w, bestBox.h, bestBox.label);
-      }
+      // Draw all detected objects above 50% threshold
+      boxes.forEach(box => {
+        drawBox(box.x, box.y, box.w, box.h, box.label);
+      });
     }
 
     function drawBox(x, y, w, h, label) {
-      // Draw Bounding Box
+      // Draw Box Outline
       ctx.strokeStyle = '#f59e0b';
       ctx.lineWidth = 4;
       ctx.strokeRect(x, y, w, h);
 
-      // Measure text for background pill
+      // Measure text label size
       ctx.font = 'bold 16px sans-serif';
       const textWidth = ctx.measureText(label).width;
       const padding = 8;
       const labelHeight = 26;
       const labelY = y > labelHeight ? y - labelHeight : y;
 
-      // Draw Label Fill
+      // Draw Label Background Fill
       ctx.fillStyle = '#f59e0b';
       ctx.fillRect(x, labelY, textWidth + padding * 2, labelHeight);
 
