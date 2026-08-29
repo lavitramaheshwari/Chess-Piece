@@ -27,13 +27,14 @@
       display: flex;
       flex-direction: column;
       justify-content: space-between;
-      padding: 2rem 4rem;
+      padding: 1.5rem 2rem;
     }
 
     header {
       display: flex;
       justify-content: space-between;
       align-items: center;
+      margin-bottom: 2rem;
     }
 
     .logo {
@@ -58,9 +59,10 @@
     main {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 4rem;
+      gap: 3rem;
       align-items: center;
       margin: auto 0;
+      width: 100%;
     }
 
     .tagline {
@@ -88,6 +90,7 @@
 
     .button-group {
       display: flex;
+      flex-wrap: wrap;
       gap: 1rem;
     }
 
@@ -99,8 +102,10 @@
       cursor: pointer;
       display: flex;
       align-items: center;
+      justify-content: center;
       gap: 8px;
       transition: opacity 0.2s ease;
+      flex: 1 1 auto;
     }
 
     .btn:hover { opacity: 0.9; }
@@ -123,18 +128,22 @@
       border-radius: 16px;
       overflow: hidden;
       border: 1px solid var(--border-color);
+      width: 100%;
+      aspect-ratio: 1 / 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
 
     #preview-img, #preview-canvas, #webcam {
       width: 100%;
-      height: 380px;
-      object-fit: cover;
+      height: 100%;
+      object-fit: contain;
       display: block;
     }
 
     #preview-canvas, #webcam { display: none; }
 
-    /* Stats Banner Below Hero Section */
     .stats-banner {
       grid-column: 1 / -1;
       background: rgba(20, 23, 32, 0.7);
@@ -142,11 +151,11 @@
       border: 1px solid var(--border-color);
       padding: 1.5rem 2rem;
       border-radius: 12px;
-      margin-top: 2rem;
+      margin-top: 1.5rem;
       display: flex;
       align-items: center;
       gap: 1.5rem;
-      max-width: 500px;
+      width: 100%;
     }
 
     .stats-banner h3 {
@@ -166,6 +175,42 @@
       color: var(--text-muted);
       font-size: 0.85rem;
       padding-top: 2rem;
+      text-align: center;
+    }
+
+    /* Responsive Mobile Styles */
+    @media (max-width: 768px) {
+      body {
+        padding: 1rem 1.25rem;
+      }
+
+      main {
+        grid-template-columns: 1fr;
+        gap: 2rem;
+      }
+
+      h1 {
+        font-size: 2.5rem;
+      }
+
+      p.description {
+        font-size: 1rem;
+      }
+
+      .button-group {
+        flex-direction: column;
+      }
+
+      .btn {
+        width: 100%;
+      }
+
+      .stats-banner {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5rem;
+        padding: 1.25rem;
+      }
     }
   </style>
 </head>
@@ -231,7 +276,6 @@
     const uploadBtn = document.getElementById('upload-btn');
     const statusText = document.getElementById('status');
 
-    // Robust ONNX Model Loading with Engine Fallback
     async function loadModel() {
       try {
         statusText.innerText = "Loading model...";
@@ -240,7 +284,7 @@
         });
         statusText.innerText = "";
       } catch (err) {
-        console.warn("WebGL initialization failed, retrying with WASM:", err);
+        console.warn("WebGL failed, attempting fallback to WASM:", err);
         try {
           session = await ort.InferenceSession.create('./best.onnx', {
             executionProviders: ['wasm']
@@ -254,7 +298,6 @@
     }
     loadModel();
 
-    // Event Listeners
     uploadBtn.addEventListener('click', () => fileInput.click());
 
     fileInput.addEventListener('change', (e) => {
@@ -275,18 +318,21 @@
       img.src = URL.createObjectURL(file);
     });
 
-    // Start Camera
     cameraBtn.addEventListener('click', async () => {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ 
+        const constraints = { 
           video: { 
-            facingMode: 'environment',
-            width: { ideal: 1280 },
-            height: { ideal: 720 }
+            facingMode: { ideal: 'environment' },
+            width: { ideal: 640 },
+            height: { ideal: 640 }
           } 
-        });
+        };
+        
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
         
         webcam.srcObject = stream;
+        await webcam.play();
+        
         previewImg.style.display = 'none';
         webcam.style.display = 'none';
         canvas.style.display = 'block';
@@ -297,15 +343,12 @@
         isStreaming = true;
         statusText.innerText = "Live detection active";
         
-        webcam.onloadedmetadata = () => {
-          processLiveFrame();
-        };
+        processLiveFrame();
       } catch (err) {
-        alert('Camera access denied or unavailable: ' + err.message);
+        alert('Camera error: ' + err.message);
       }
     });
 
-    // Stop Camera
     stopCameraBtn.addEventListener('click', stopWebcam);
 
     function stopWebcam() {
@@ -328,7 +371,6 @@
       statusText.innerText = "";
     }
 
-    // Continuous Live Video Loop
     async function processLiveFrame() {
       if (!isStreaming) return;
 
@@ -342,7 +384,6 @@
       animationFrameId = requestAnimationFrame(processLiveFrame);
     }
 
-    // Inference Engine
     async function runInferenceOnCanvas() {
       if (!session) return;
 
@@ -371,9 +412,9 @@
       }
     }
 
-    // Process Detections (Threshold > 50%, removes confidence text)
     function processDetections(outputData, dims) {
-      const CONF_THRESHOLD = 0.50; // Filter detections above 50%
+      const CONF_THRESHOLD = 0.50;
+      const IOU_THRESHOLD = 0.45;
       const numAnchors = dims[2] || 8400;
 
       let boxes = [];
@@ -402,37 +443,64 @@
           boxes.push({
             x, y, w, h,
             score: highestClassScore,
-            label: CLASS_NAMES[classId] // Class name only (no percentage)
+            label: CLASS_NAMES[classId]
           });
         }
       }
 
-      // Draw all detected objects above 50% threshold
-      boxes.forEach(box => {
+      // Filter overlapping boxes using Non-Maximum Suppression (NMS)
+      const nmsBoxes = nonMaxSuppression(boxes, IOU_THRESHOLD);
+
+      nmsBoxes.forEach(box => {
         drawBox(box.x, box.y, box.w, box.h, box.label);
       });
     }
 
+    // IoU Calculation for NMS
+    function intersectionOverUnion(boxA, boxB) {
+      const xA = Math.max(boxA.x, boxB.x);
+      const yA = Math.max(boxA.y, boxB.y);
+      const xB = Math.min(boxA.x + boxA.w, boxB.x + boxB.w);
+      const yB = Math.min(boxA.y + boxA.h, boxB.y + boxB.h);
+
+      const interArea = Math.max(0, xB - xA) * Math.max(0, yB - yA);
+      const boxAArea = boxA.w * boxA.h;
+      const boxBArea = boxB.w * boxB.h;
+
+      return interArea / (boxAArea + boxBArea - interArea);
+    }
+
+    function nonMaxSuppression(boxes, iouThreshold) {
+      boxes.sort((a, b) => b.score - a.score);
+      const selected = [];
+
+      while (boxes.length > 0) {
+        const current = boxes.shift();
+        selected.push(current);
+
+        boxes = boxes.filter(box => {
+          return intersectionOverUnion(current, box) < iouThreshold;
+        });
+      }
+      return selected;
+    }
+
     function drawBox(x, y, w, h, label) {
-      // Draw Box Outline
       ctx.strokeStyle = '#f59e0b';
-      ctx.lineWidth = 4;
+      ctx.lineWidth = 3;
       ctx.strokeRect(x, y, w, h);
 
-      // Measure text label size
-      ctx.font = 'bold 16px sans-serif';
+      ctx.font = 'bold 14px sans-serif';
       const textWidth = ctx.measureText(label).width;
-      const padding = 8;
-      const labelHeight = 26;
+      const padding = 6;
+      const labelHeight = 22;
       const labelY = y > labelHeight ? y - labelHeight : y;
 
-      // Draw Label Background Fill
       ctx.fillStyle = '#f59e0b';
       ctx.fillRect(x, labelY, textWidth + padding * 2, labelHeight);
 
-      // Draw Label Text
       ctx.fillStyle = '#000000';
-      ctx.fillText(label, x + padding, labelY + 18);
+      ctx.fillText(label, x + padding, labelY + 16);
     }
   </script>
 </body>
