@@ -513,19 +513,26 @@
     }
 
     function generateFEN() {
+      // 8x8 grid storing { piece, score } per square
       const board = Array(8).fill(null).map(() => Array(8).fill(null));
+      const cellWidth = canvas.width / 8;
+      const cellHeight = canvas.height / 8;
 
       currentDetections.forEach(box => {
-        const centerX = box.x + box.w / 2;
-        const centerY = box.y + box.h / 2;
+        // Calculate the base coordinate (bottom-center of bounding box)
+        // to correctly anchor taller pieces into their actual board square
+        const baseX = box.x + box.w / 2;
+        const baseY = box.y + box.h * 0.85; 
 
-        const fileIndex = Math.floor((centerX / canvas.width) * 8);
-        const rankIndex = Math.floor((centerY / canvas.height) * 8);
+        const fileIndex = Math.min(7, Math.max(0, Math.floor(baseX / cellWidth)));
+        const rankIndex = Math.min(7, Math.max(0, Math.floor(baseY / cellHeight)));
 
-        if (rankIndex >= 0 && rankIndex < 8 && fileIndex >= 0 && fileIndex < 8) {
-          const pieceChar = PIECE_MAP[box.label];
-          if (pieceChar) {
-            board[rankIndex][fileIndex] = pieceChar;
+        const pieceChar = PIECE_MAP[box.label];
+        if (pieceChar) {
+          const currentSquare = board[rankIndex][fileIndex];
+          // Deduplicate multiple detections on the same square via confidence score
+          if (!currentSquare || box.score > currentSquare.score) {
+            board[rankIndex][fileIndex] = { piece: pieceChar, score: box.score };
           }
         }
       });
@@ -535,13 +542,13 @@
         let emptyCount = 0;
         let rankStr = '';
         for (let c = 0; c < 8; c++) {
-          const piece = board[r][c];
-          if (piece) {
+          const item = board[r][c];
+          if (item) {
             if (emptyCount > 0) {
               rankStr += emptyCount;
               emptyCount = 0;
             }
-            rankStr += piece;
+            rankStr += item.piece;
           } else {
             emptyCount++;
           }
