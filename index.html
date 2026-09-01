@@ -233,6 +233,7 @@
         <button class="btn btn-orange" id="camera-btn">📷 Start Camera</button>
         <button class="btn btn-outline" id="stop-camera-btn" style="display: none; border-color: #ef4444; color: #ef4444;">🛑 Stop Camera</button>
         <button class="btn btn-outline" id="upload-btn">📤 Upload Image</button>
+        <button class="btn btn-outline" id="fen-btn">📋 Export FEN</button>
         <input type="file" id="file-input" accept="image/*" style="display:none;">
       </div>
       
@@ -261,10 +262,16 @@
       'w_BISHOP', 'w_KING', 'w_KNIGHT', 'w_PAWN', 'w_QUEEN', 'w_ROOK'
     ];
 
+    const PIECE_MAP = {
+      'w_PAWN': 'P', 'w_ROOK': 'R', 'w_KNIGHT': 'N', 'w_BISHOP': 'B', 'w_QUEEN': 'Q', 'w_KING': 'K',
+      'b_PAWN': 'p', 'b_ROOK': 'r', 'b_KNIGHT': 'n', 'b_BISHOP': 'b', 'b_QUEEN': 'q', 'b_KING': 'k'
+    };
+
     let session = null;
     let isStreaming = false;
     let isProcessing = false;
     let animationFrameId = null;
+    let currentDetections = [];
 
     const previewImg = document.getElementById('preview-img');
     const canvas = document.getElementById('preview-canvas');
@@ -274,6 +281,7 @@
     const cameraBtn = document.getElementById('camera-btn');
     const stopCameraBtn = document.getElementById('stop-camera-btn');
     const uploadBtn = document.getElementById('upload-btn');
+    const fenBtn = document.getElementById('fen-btn');
     const statusText = document.getElementById('status');
 
     async function loadModel() {
@@ -450,6 +458,7 @@
 
       // Filter overlapping boxes using Non-Maximum Suppression (NMS)
       const nmsBoxes = nonMaxSuppression(boxes, IOU_THRESHOLD);
+      currentDetections = nmsBoxes;
 
       nmsBoxes.forEach(box => {
         drawBox(box.x, box.y, box.w, box.h, box.label);
@@ -502,6 +511,58 @@
       ctx.fillStyle = '#000000';
       ctx.fillText(label, x + padding, labelY + 16);
     }
+
+    function generateFEN() {
+      const board = Array(8).fill(null).map(() => Array(8).fill(null));
+
+      currentDetections.forEach(box => {
+        const centerX = box.x + box.w / 2;
+        const centerY = box.y + box.h / 2;
+
+        const fileIndex = Math.floor((centerX / canvas.width) * 8);
+        const rankIndex = Math.floor((centerY / canvas.height) * 8);
+
+        if (rankIndex >= 0 && rankIndex < 8 && fileIndex >= 0 && fileIndex < 8) {
+          const pieceChar = PIECE_MAP[box.label];
+          if (pieceChar) {
+            board[rankIndex][fileIndex] = pieceChar;
+          }
+        }
+      });
+
+      const fenRanks = [];
+      for (let r = 0; r < 8; r++) {
+        let emptyCount = 0;
+        let rankStr = '';
+        for (let c = 0; c < 8; c++) {
+          const piece = board[r][c];
+          if (piece) {
+            if (emptyCount > 0) {
+              rankStr += emptyCount;
+              emptyCount = 0;
+            }
+            rankStr += piece;
+          } else {
+            emptyCount++;
+          }
+        }
+        if (emptyCount > 0) {
+          rankStr += emptyCount;
+        }
+        fenRanks.push(rankStr);
+      }
+
+      return fenRanks.join('/') + ' w - - 0 1';
+    }
+
+    fenBtn.addEventListener('click', () => {
+      const fen = generateFEN();
+      navigator.clipboard.writeText(fen).then(() => {
+        statusText.innerText = "FEN copied to clipboard: " + fen;
+      }).catch(err => {
+        statusText.innerText = "FEN: " + fen;
+      });
+    });
   </script>
 </body>
 </html>
